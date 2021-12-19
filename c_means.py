@@ -1,107 +1,106 @@
-
-import math
-
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def dist(x1, y1, x2, y2):
-    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+    return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
 
-def random_points(n):
-    x = np.random.randint(0, 100, n)
-    y = np.random.randint(0, 100, n)
-    return [x, y]
-
-
-def centroid(x, y, cluster, n):
-    x_c = np.mean(x)
-    y_c = np.mean(y)
-    radius = dist(x_c, y_c, x[0], y[0])
+def cluster(matrix, n, k):
+    clust = np.zeros(n)
     for i in range(n):
-        if dist(x_c, y_c, x[i], y[i]) > radius:
-            radius = dist(x_c, y_c, x[i], y[i])
-    x_cntr, y_cntr = [], []
-    for i in range(cluster):
-        x_cntr.append(x_c + radius * np.cos(2 * i * np.pi / cluster))
-        y_cntr.append(y_c + radius * np.sin(2 * i * np.pi / cluster))
-    return [x_cntr, y_cntr]
+        max_affiliation = max(matrix[i])
+        for j in range(k):
+            if matrix[i][j] == max_affiliation:
+                clust[i] = j
+    return clust
 
 
-def matrix(n, cluster, x, y, x_cntr, y_cntr, u, m):
-    for i in range(n):
-        sum = 0
-        for j in range(cluster):
-            u[i][j] = dist(x[i], y[i], x_cntr[j], y_cntr[j]) ** (2 / (1 - m))
-            sum += u[i][j]
-        for j in range(cluster):
-            u[i][j] /= sum
+def draw(x, y, clust, x_cc, y_cc):
+    colors = ['b', 'g', 'r', 'darkmagenta', 'm', 'y', 'k', 'w']
+    for i in range(len(x)):
+        plt.scatter(x[i], y[i], c=colors[int(clust[i])])
 
-
-def check(u_old, u_new, n, cluster, eps):
-    for i in range(n):
-        for j in range(cluster):
-            if abs(u_old[i][j] - u_new[i][j]) > eps:
-                return False
-    return True
-
-
-def recentr(cluster, n, m, x_cntr, y_cntr, u, x, y, ):
-    for i in range(cluster):
-        x_cntr[i] = 0
-        y_cntr[i] = 0
-        sum = 0
-        for j in range(n):
-            tmp = u[j][i] ** m
-            x_cntr[i] += tmp * x[j]
-            y_cntr[i] += tmp * y[j]
-            sum += tmp
-        x_cntr[i] /= sum
-        y_cntr[i] /= sum
-
-
-def show(cluster, x, y, u, n, x_cntr, y_cntr):
-    colors_dots = {
-        0: 'b',
-        1: 'g',
-        2: 'y'
-    }
-    for i in range(n):
-        color_ind = 0
-        max = 0
-        for j in range(cluster):
-            if (max < u[i][j]):
-                color_ind = j
-                max = u[i][j]
-        plt.scatter(x[i], y[i], color=colors_dots[color_ind])
-        plt.scatter(x_cntr[color_ind], y_cntr[color_ind], color='r')
+    plt.scatter(x_cc, y_cc, marker='X')
     plt.show()
+
+
+def recntr(x, y, matrix, k, m):
+    x_cc = np.zeros(k)
+    y_cc = np.zeros(k)
+
+    for i in range(k):
+        n = 0
+        sum_x = 0
+        sum_y = 0
+
+        for j in range(len(x)):
+            max = 0
+            for t in matrix[j]:
+                if t > max:
+                    max = t
+            if matrix[j, i] == max:
+                n = n + matrix[j, i] ** m
+                sum_x = sum_x + matrix[j, i] ** m * x[j]
+                sum_y = sum_y + matrix[j, i] ** m * y[j]
+
+        if n != 0:
+            x_cc[i] = sum_x / n
+            y_cc[i] = sum_y / n
+        else:
+            x_cc[i] = 0
+            y_cc[i] = 0
+
+    return x_cc, y_cc
+
+
+def calculate_new_probability_clusters(n, k, x, y, x_c, y_c, m):
+    matrix = np.zeros((n, k))
+    for i in range(n):
+        for j in range(k):
+            sum = 0
+            distance_to_center_j = dist(x[i], y[i], x_c[j], y_c[j])
+            for t in range(k):
+                distance_to_center_t = dist(x[i], y[i], x_c[t], y_c[t])
+                sum += (distance_to_center_j / distance_to_center_t) ** (2 / (m - 1))
+            matrix[i, j] = 1 / sum
+    return matrix
+
+
+def did_algo_converge(old_matrix, matrix, n, k, epsilon):
+    max = 0
+    for i in range(n):
+        for j in range(k):
+            diff = np.abs(matrix[i, j] - old_matrix[i, j])
+            if diff > max:
+                max = diff
+    return max < epsilon
 
 
 def c_means():
-    # Задаем начальные значения
-    m = 2
-    eps = 0.01
-    n = 100
-    [x, y] = random_points(n)
-    cluster = 3
-    # подсчитываем начальные приближения центров
-    [x_cntr, y_cntr] = centroid(x, y, cluster, n)
+    n = 100  # кол-во точек
+    k = 4  # кол-во кластеров
+    m = 1.5  # экс. вес
+    epsilon = 0.1  # параметр останова
 
-    plt.scatter(x, y, color='b')
-    plt.scatter(x_cntr, y_cntr, color='r')
-    plt.show()
+    x = np.random.randint(1, 100, n)
+    y = np.random.randint(1, 100, n)
 
-    u_old = np.zeros((n, cluster))
-    u_new = np.zeros((n, cluster))
+    matrix = np.zeros((n, k))
+    for i in range(n):
+        for j in range(k):
+            matrix[i, j] = np.random.uniform(1, 4)
 
-    # подсчитаем матрицу вероятностей
-    matrix(n, cluster, x, y, x_cntr, y_cntr, u_new, m)
+    while True:
+        x_c, y_c = recntr(x, y, matrix, k, m)
+        new_matrix = calculate_new_probability_clusters(n, k, x, y, x_c, y_c, m)
+        if did_algo_converge(new_matrix, matrix, n, k, epsilon):
+            clusters = cluster(new_matrix, n, k)
+            draw(x, y, clusters, x_c, y_c)
+            break
+        matrix = new_matrix
+    return x_c, y_c, new_matrix
 
-    while not check(u_old, u_new, n, cluster, eps):
-        u_old = u_new.copy()
-        recentr(cluster, n, m, x_cntr, y_cntr, u_old, x, y)
-        matrix(n, cluster, x, y, x_cntr, y_cntr, u_new, m)
-        show(cluster, x, y, u_old, n, x_cntr, y_cntr)
-    show(cluster, x, y, u_old, n, x_cntr, y_cntr)
+
+if __name__ == '__main__':
+    c_means()
