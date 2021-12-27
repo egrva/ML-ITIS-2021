@@ -1,81 +1,98 @@
-import numpy as np
 import pygame
+import numpy as np
 
-class DBScan:
-    def algo(self, points, eps):
-        labels = [0] * len(points)
-        cluster_idx = 0
-        minimum_points = 1
-        for i in range(0, len(points)):
-            if not (labels[i] == 0):
-                continue
-            near_points = self.near_by_points(points, i, eps)
-            if len(near_points) < minimum_points:
-                labels[i] = -1
-            else:
-                cluster_idx += 1
-                labels[i] = cluster_idx
-                i = 0
-                while i < len(near_points):
-                    point = near_points[i]
-                    if labels[point] == -1:
-                        labels[point] = cluster_idx
 
-                    elif labels[point] == 0:
-                        labels[point] = cluster_idx
-                        point_near = self.near_by_points(points, point, eps)
-                        if len(point_near) >= minimum_points:
-                            near_points = near_points + point_near
-                    i += 1
+def dist(point1, point2):
+    return np.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-        return labels
 
-    def near_by_points(self, points, idx, eps):
-        near = []
-        for point_idx in range(0, len(points)):
-            if np.linalg.norm(points[idx] - points[point_idx]) < eps:
-                near.append(point_idx)
-        return near
+def dbscan(points, eps, min_points):
+    labels = [0] * len(points)
+    cluster_id = 0
+    for i in range(0, len(points)):
+        if not (labels[i] == 0):
+            continue
+        neighbours = find_neighbours(points, i, eps)
+        if len(neighbours) < min_points:
+            labels[i] = -1
+        else:
+            cluster_id += 1
+            create_cluster(points, labels, i, neighbours, cluster_id, eps, min_points)
+    return labels
 
-    def colors(self, list_col):
-        if list_col == 1:
-            return (255, 0, 0)
-        if list_col == 2:
-            return (0, 255, 0)
-        if list_col == 3:
-            return (0, 0, 255)
-        if list_col == 4:
-            return (0, 0, 0)
-        return (125, 125, 125)
 
-    def draw(self, list_col, clusters):
-        for point, cluster in zip(list_col, clusters):
-            color = self.colors(cluster)
-            radius = 10
-            pygame.draw.circle(screen, color, point, radius)
+def find_neighbours(points, cent_point_id, eps):
+    neighbours = []
+    for point in range(0, len(points)):
+        if dist(points[cent_point_id], points[point]) < eps:
+            neighbours.append(point)
+    return neighbours
 
+
+def create_cluster(points, labels, cent_point_id, cent_point_neighbours, cluster_id, eps, min_points):
+    labels[cent_point_id] = cluster_id
+    i = 0
+    while i < len(cent_point_neighbours):
+        point = cent_point_neighbours[i]
+        if labels[point] == -1:
+            labels[point] = cluster_id
+        elif labels[point] == 0:
+            labels[point] = cluster_id
+            point_neighbours = find_neighbours(points, point, eps)
+            if len(point_neighbours) >= min_points:
+                cent_point_neighbours = cent_point_neighbours + point_neighbours
+        i += 1
+
+
+def draw_circles(points, cluster_ids):
+    for point, cluster_id in zip(points, cluster_ids):
+        width = 0
+        if cluster_id == -1:
+            width = empty_width
+        pygame.draw.circle(screen, colors[cluster_id], point, circle_radius, width)
 
 
 if __name__ == '__main__':
+    # dbscan params
+    eps = 30
+    min_points = 3
+
+    # pygame params
+    window_width = 1280
+    window_height = 720
+    fps = 60
+    circle_radius = 7
+    empty_width = 2
+
     pygame.init()
-    dbcan_class = DBScan()
-    screen = pygame.display.set_mode((1280, 720))
+    screen = pygame.display.set_mode((window_width, window_height))
+    pygame.display.set_caption("DBSCAN")
     clock = pygame.time.Clock()
+    white = (255, 255, 255)
+    screen.fill(white)
+    colors = []
+    for i in range(1, 255):
+        colors.append(tuple(np.random.choice(range(256), size=3)))
+    grey = (123, 123, 123)
+    colors.append(grey)
+
     points = []
-    screen.fill((255, 255, 255))
-
-    eps = 40
-
-    done = False
-    while not done:
-        clock.tick(60)
+    q = False
+    while not q:
+        clock.tick(fps)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                done = True
-            if event.type == pygame.MOUSEBUTTONDOWN:
+                q = True
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                q = True
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                points = []
+                screen.fill(white)
+            if pygame.mouse.get_pressed()[0]:
                 points.append(pygame.mouse.get_pos())
-                screen.fill((255, 255, 255))
-                prediction = dbcan_class.algo(np.array(points), eps)
-                dbcan_class.draw(points, prediction)
-
+                pygame.draw.circle(screen, colors[-1], points[-1], circle_radius, empty_width)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                cluster_ids = dbscan(np.array(points), eps, min_points)
+                screen.fill(white)
+                draw_circles(points, cluster_ids)
         pygame.display.update()
